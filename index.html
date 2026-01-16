@@ -22,7 +22,6 @@
         align-items: center;
     }
 
-    /* === CLOCK === */
     .clock {
         text-align: center;
         margin-bottom: 80px;
@@ -40,7 +39,6 @@
         margin-top: 10px;
     }
 
-    /* === CONTROLS === */
     .controls {
         display: flex;
         gap: 40px;
@@ -77,13 +75,25 @@
 
 <script>
     const TOTAL_TIME = 2 * 60 * 60 * 1000;
+
+    let endTime = null;
     let remaining = TOTAL_TIME;
-    let timer = null;
+    let running = false;
 
     const timeEl = document.getElementById("time");
     const msEl = document.getElementById("ms");
 
     function update() {
+        if (running) {
+            const now = Date.now();
+            remaining = endTime - now;
+
+            if (remaining <= 0) {
+                remaining = 0;
+                running = false;
+            }
+        }
+
         const h = Math.floor(remaining / 3600000);
         const m = Math.floor((remaining % 3600000) / 60000);
         const s = Math.floor((remaining % 60000) / 1000);
@@ -92,29 +102,23 @@
         timeEl.textContent =
             `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
         msEl.textContent = "." + String(ms).padStart(3, "0");
+
+        requestAnimationFrame(update);
     }
 
     function start() {
-        if (timer) return;
-        timer = setInterval(() => {
-            remaining -= 10;
-            if (remaining <= 0) {
-                remaining = 0;
-                pause();
-            }
-            update();
-        }, 10);
+        if (running) return;
+        running = true;
+        endTime = Date.now() + remaining;
     }
 
     function pause() {
-        clearInterval(timer);
-        timer = null;
+        running = false;
     }
 
     function reset() {
-        pause();
+        running = false;
         remaining = TOTAL_TIME;
-        update();
     }
 
     update();
