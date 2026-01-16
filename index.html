@@ -23,19 +23,26 @@ body {
 
 .container {
     position: relative;
-    width: 520px;
-    height: 460px;
+    width: 560px;
+    height: 520px;
 }
 
 /* dB Meter */
-.db-meter {
+.db-container {
     position: absolute;
     left: 0;
     top: 50%;
     transform: translateY(-50%);
+    width: 60px;
+    text-align: center;
+}
+
+.db-meter {
     width: 20px;
     height: 300px;
+    margin: 0 auto 10px;
     border: 2px solid #333;
+    position: relative;
 }
 
 .db-level {
@@ -44,6 +51,11 @@ body {
     width: 100%;
     height: 0%;
     background: green;
+}
+
+.db-value {
+    font-size: 14px;
+    letter-spacing: 1px;
 }
 
 /* LED Ring */
@@ -91,6 +103,30 @@ body {
 @keyframes blink {
     50% { opacity: 0.3; }
 }
+
+/* Controls */
+.controls {
+    position: absolute;
+    bottom: 0;
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    gap: 20px;
+}
+
+button {
+    background: #000;
+    color: var(--main-color);
+    border: 2px solid var(--main-color);
+    padding: 8px 22px;
+    font-size: 15px;
+    cursor: pointer;
+}
+
+button:hover {
+    background: var(--main-color);
+    color: #000;
+}
 </style>
 </head>
 
@@ -98,14 +134,27 @@ body {
 
 <div class="container">
 
-    <div class="db-meter">
-        <div class="db-level" id="dbLevel"></div>
+    <!-- dB Meter -->
+    <div class="db-container">
+        <div class="db-meter">
+            <div class="db-level" id="dbLevel"></div>
+        </div>
+        <div class="db-value" id="dbValue">–∞ dB</div>
     </div>
 
+    <!-- LED Ring -->
     <div class="led-ring" id="ledRing"></div>
 
+    <!-- Timer -->
     <div class="timer" id="timer">
         <span id="time">02:00:00</span><span class="ms" id="ms">.0</span>
+    </div>
+
+    <!-- Controls -->
+    <div class="controls">
+        <button onclick="start()">Start</button>
+        <button onclick="pause()">Pause</button>
+        <button onclick="resetTimer()">Reset</button>
     </div>
 
 </div>
@@ -126,9 +175,9 @@ const ledRing = document.getElementById("ledRing");
 
 const leds = [];
 const radius = 210;
-const center = 260;
+const center = 300;
 
-/* LEDs erzeugen */
+/* LEDs */
 for (let i = 0; i < LED_COUNT; i++) {
     const led = document.createElement("div");
     led.className = "led";
@@ -179,16 +228,27 @@ function start() {
         remaining -= 100;
         if (remaining < 0) remaining = 0;
         updateDisplay();
-        if (remaining === 0) clearInterval(interval);
+        if (remaining === 0) pause();
     }, 100);
 }
 
-start();
+function pause() {
+    clearInterval(interval);
+    interval = null;
+}
+
+function resetTimer() {
+    pause();
+    remaining = START_TIME;
+    updateDisplay();
+}
+
 updateDisplay();
 
 /* ================= dB METER ================= */
 
 const dbLevel = document.getElementById("dbLevel");
+const dbValue = document.getElementById("dbValue");
 
 navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
     const audioCtx = new AudioContext();
@@ -201,15 +261,33 @@ navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
     const data = new Uint8Array(analyser.frequencyBinCount);
 
     function updateDb() {
-        analyser.getByteFrequencyData(data);
-        const avg = data.reduce((a,b)=>a+b,0)/data.length;
-        const level = Math.min(100, avg);
+        analyser.getByteTimeDomainData(data);
 
-        dbLevel.style.height = level + "%";
+        let sum = 0;
+        for (let i = 0; i < data.length; i++) {
+            const v = (data[i] - 128) / 128;
+            sum += v * v;
+        }
 
-        if (level > 80) dbLevel.style.background = "red";
-        else if (level > 50) dbLevel.style.background = "yellow";
-        else dbLevel.style.background = "green";
+        const rms = Math.sqrt(sum / data.length);
+        const db = rms > 0 ? 20 * Math.log10(rms) : -Infinity;
+
+        const clamped = Math.max(-60, db);
+        const percent = ((clamped + 60) / 60) * 100;
+
+        dbLevel.style.height = percent + "%";
+        dbValue.textContent = isFinite(db) ? Math.round(db) + " dB" : "–∞ dB";
+
+        if (db > -10) {
+            dbLevel.style.background = "red";
+            dbValue.style.color = "red";
+        } else if (db > -25) {
+            dbLevel.style.background = "yellow";
+            dbValue.style.color = "yellow";
+        } else {
+            dbLevel.style.background = "green";
+            dbValue.style.color = "green";
+        }
 
         requestAnimationFrame(updateDb);
     }
